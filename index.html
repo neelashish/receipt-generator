@@ -406,7 +406,7 @@ function buildPdf(jpg,w,h){
 // ==/CORE==
 
 /* ---------------- storage ---------------- */
-const DEFAULT_BIZ={name:'WINNERS CREEK',address:'Capt R. A. Alexander House, Near Care Bear School AMRITPURI,\nAgra Road, Jaipur - 302003 (Rajasthan)',email:'winnerscreek@gmail.com',phone:'9314099002',gstin:'08AEQPC9460E2ZA',bank:'627801010051029',ifsc:'UBIN0562785',micr:'302026501',declaration:'Composition Taxable person, not eligible to collect tax on supplies.',preparedBy:'',terms:'',logo:'',signature:'',preparedSig:''};
+const DEFAULT_BIZ={name:'',address:'',email:'',phone:'',gstin:'',bank:'',ifsc:'',micr:'',declaration:'',preparedBy:'',terms:'',logo:'',signature:'',preparedSig:''};
 function lsGet(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
 function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}
 let biz=Object.assign({},DEFAULT_BIZ,lsGet('rf_biz',{}));
@@ -434,7 +434,7 @@ function receiptHTML(r,b){
   const rows=items.map((it,i)=>'<div>'+(i+1)+'</div><div>'+esc(it.description)+'</div><div>'+fmtAmt(it.amount)+'</div>').join('');
   const bank=[b.bank?'<div>Bank A/C: '+esc(b.bank)+'</div>':'',b.ifsc?'<div>IFSC Code: '+esc(b.ifsc)+'</div>':'',b.micr?'<div>MICR Code: '+esc(b.micr)+'</div>':''].join('');
   return '<div class="receipt"><div class="rc">'+
-   '<div class="rc-head"><div class="rc-logo">'+logo+'</div><div class="rc-htxt"><div class="rc-name">'+esc(b.name)+'</div>'+
+   '<div class="rc-head"><div class="rc-logo">'+logo+'</div><div class="rc-htxt"><div class="rc-name">'+esc(b.name||'Your Business Name')+'</div>'+
      (b.address?'<div class="rc-addr">'+esc(b.address)+'</div>':'')+(contact?'<div class="rc-contact">'+contact+'</div>':'')+
      (b.gstin?'<div class="rc-gst">GSTIN: '+esc(b.gstin)+'</div>':'')+'</div></div>'+
    '<div class="rc-to"><div class="to-l">'+
@@ -445,11 +445,11 @@ function receiptHTML(r,b){
    '<div class="tr h"><div>S.No.</div><div>Particulars</div><div>Amount (Rs.)</div></div>'+
    '<div class="tbody"><div class="vl" style="left:15mm"></div><div class="vl" style="right:34mm"></div><div class="grid">'+rows+'</div></div>'+
    '<div class="tr t"><div></div><div>TOTAL AMOUNT</div><div>'+(items.length?fmtAmt(total):'')+'</div></div>'+
-   '<div class="rc-decl">Declaration: '+esc(b.declaration)+'</div>'+
+   '<div class="rc-decl">'+(b.declaration?'Declaration: '+esc(b.declaration):'&nbsp;')+'</div>'+
    '<div class="rc-words"><b>Total Invoice Amount (in word)</b><span>'+(total>0?esc(amountInWords(total)):'')+'</span></div>'+
    '<div class="rc-bot"><div class="bk"><div class="bank"><b class="t">Bank Details:</b>'+bank+'</div><div class="terms"><b>Terms &amp; Conditions:</b>'+terms+'</div></div>'+
      '<div class="pb"><div class="pn">'+(b.preparedSig?'<img src="'+esc(b.preparedSig)+'" alt="">':'')+'<span>'+esc(b.preparedBy)+'</span></div><div class="lb">Prepared by</div></div>'+
-     '<div class="sg"><div class="c">Certified that the particular given above are true and correct.</div><div class="f">for '+esc(b.name)+'</div>'+
+     '<div class="sg"><div class="c">Certified that the particular given above are true and correct.</div><div class="f">for '+esc(b.name||'Your Business Name')+'</div>'+
        '<div class="im">'+(b.signature?'<img src="'+esc(b.signature)+'" alt="">':'')+'</div><div class="lb">Authorised Signatory</div></div></div>'+
   '</div></div>';
 }
@@ -477,12 +477,17 @@ function safeName(s){return String(s||'').replace(/[^\w\- ]+/g,'').trim().replac
 function fileBase(r){return 'Receipt-'+(safeName(r.receiptNumber)||'NA')+'-'+(safeName(r.recipientName)||'recipient')}
 
 /* ---------------- print + pdf ---------------- */
+function needBiz(){
+  if((biz.name||'').trim())return false;
+  toast('Add your business details first (at least the business name).','err');openProfile();return true;
+}
+
 function saveBlob(blob,name){
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;
   document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
 }
 async function printReceipts(list){
-  if(!list.length)return;
+  if(!list.length||needBiz())return;
   const root=$('#printRoot');
   root.innerHTML=list.map(r=>receiptHTML(r,biz)).join('');
   await Promise.all($$('img',root).map(i=>i.decode?i.decode().catch(()=>{}):Promise.resolve()));
@@ -518,12 +523,14 @@ async function makePdf(r){
   return buildPdf(jpg,c.width,c.height);
 }
 async function downloadPdf(r,btn){
+  if(needBiz())return;
   const lbl=btn&&btn.textContent;if(btn){btn.disabled=true;btn.textContent='Preparing…'}
   try{saveBlob(await makePdf(r),fileBase(r)+'.pdf');toast('PDF downloaded','ok')}
   catch(e){toast('Could not create PDF: '+e.message+'. Try Print / Save PDF.','err')}
   finally{if(btn){btn.disabled=false;btn.textContent=lbl}}
 }
 async function downloadZip(list,btn){
+  if(needBiz())return;
   const lbl=btn.textContent;btn.disabled=true;
   try{
     const files=[],used={};
@@ -582,13 +589,13 @@ function openProfile(){
   const m=openModal('<div class="head"><div><h2>Business Profile</h2><div class="note">Appears on every receipt. Saved in this browser.</div></div><button class="btn sm" id="px">Done</button></div>'+
    '<div style="display:flex;flex-direction:column;gap:12px">'+
    '<label class="f">Address<textarea class="input" data-k="address" rows="3">'+esc(biz.address)+'</textarea></label>'+
-   '<div class="row2">'+T.map(([k,l])=>'<label class="f">'+l+'<input class="input" data-k="'+k+'" value="'+esc(biz[k])+'"></label>').join('')+'</div>'+
+   '<div class="row2">'+T.map(([k,l])=>'<label class="f">'+l+'<input class="input" data-k="'+k+'" value="'+esc(biz[k])+'" placeholder="'+(k==='name'?'Required':'Optional')+'"></label>').join('')+'</div>'+
    '<label class="f">Declaration<textarea class="input" data-k="declaration" rows="2">'+esc(biz.declaration)+'</textarea></label>'+
    '<label class="f">Terms &amp; Conditions (one per line, optional)<textarea class="input" data-k="terms" rows="3">'+esc(biz.terms)+'</textarea></label>'+
    '<div class="row2"><div class="f"><span>Logo</span><div class="upl"><div class="thumb" id="lt"></div><div><button class="btn sm" data-up="logo">Upload</button> <button class="btn sm ghost" data-rm="logo">Remove</button></div></div></div>'+
    '<div class="f"><span>Authorized Signature</span><div class="upl"><div class="thumb" id="st"></div><div><button class="btn sm" data-up="signature">Upload</button> <button class="btn sm ghost" data-rm="signature">Remove</button></div></div></div></div>'+
    '<div class="f"><span>Prepared By signature (optional)</span><div class="upl"><div class="thumb" id="pt"></div><div><button class="btn sm" data-up="preparedSig">Upload</button> <button class="btn sm ghost" data-rm="preparedSig">Remove</button></div></div></div>'+
-   '<div><button class="btn sm danger" id="reset">Reset to sample details</button></div></div>'+
+   '<div><button class="btn sm danger" id="reset">Clear all details</button></div></div>'+
    '<input type="file" accept="image/*" id="imgin" hidden>');
   const thumbs=()=>{$('#lt',m).innerHTML=biz.logo?'<img src="'+esc(biz.logo)+'">':'none';$('#st',m).innerHTML=biz.signature?'<img src="'+esc(biz.signature)+'">':'none';$('#pt',m).innerHTML=biz.preparedSig?'<img src="'+esc(biz.preparedSig)+'">':'none'};
   thumbs();
@@ -604,7 +611,7 @@ function openProfile(){
     try{biz[target]=await readImage(f,target==='logo'?400:600);saveBiz();thumbs()}catch(err){toast(err.message,'err')}
   };
   $('#px',m).onclick=closeModal;
-  $('#reset',m).onclick=()=>{biz=Object.assign({},DEFAULT_BIZ);saveBiz();closeModal();openProfile();toast('Reset to sample details','ok')};
+  $('#reset',m).onclick=()=>{biz=Object.assign({},DEFAULT_BIZ);saveBiz();closeModal();openProfile();toast('Clear all details','ok')};
 }
 let onBizChange=null;
 
@@ -620,7 +627,7 @@ function homeView(){
 
 /* ---------------- manual ---------------- */
 let M=null,touched={},showAll=false;
-function newManual(){M={recipientName:'Nipun Sareen',address:'A-1',reference:'QSE-001',receiptNumber:'143',date:todayISO(),items:[{description:'Soft Skills Fees',amount:'850'}]};touched={};showAll=false}
+function newManual(){M={recipientName:'Sample Student',address:'Address line',reference:'STU-001',receiptNumber:'1',date:todayISO(),items:[{description:'Soft Skills Fees',amount:'850'}]};touched={};showAll=false}
 function mReceipt(){return {recipientName:M.recipientName.trim(),address:M.address.trim(),reference:M.reference.trim(),receiptNumber:M.receiptNumber.trim(),date:M.date,items:M.items.map(i=>({description:i.description.trim(),amount:parseAmount(i.amount)}))}}
 function mErrors(){
   const e={items:M.items.map(()=>({}))};
@@ -639,6 +646,7 @@ function mHasErr(e){return !!(e.name||e.receiptNumber||e.date||e.items.some(x=>x
 function manualView(){
   if(!M)newManual();
   setView('<div><div class="pagehead"><button class="back" onclick="location.hash=\'#/\'" aria-label="Back">←</button><h1>Create Receipt</h1></div>'+
+  '<div id="bizb" class="msg-err" style="margin:0 0 16px;display:'+((biz.name||'').trim()?'none':'flex')+';justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><span>Add your business details so they appear on your receipts.</span><button class="btn sm primary" onclick="openProfile()">Set up Business Profile</button></div>'+
   '<div class="ws"><section class="panel form">'+
    '<h2>Receipt Details</h2>'+
    '<label class="f">Recipient Name<input class="input" id="f-name" autocomplete="off"><span class="err" id="e-name"></span></label>'+
@@ -670,7 +678,7 @@ function manualView(){
   $('#print').onclick=()=>mOutput('print');
   $('#dl').onclick=e=>mOutput('pdf',e.currentTarget);
   $('#reset').onclick=()=>{M={recipientName:'',address:'',reference:'',receiptNumber:'',date:todayISO(),items:[{description:'',amount:''}]};touched={};showAll=false;manualView()};
-  onBizChange=()=>{mUpdate();const p=$('#f-prep');if(p)p.value=biz.preparedBy||'';['preparedSig','signature'].forEach(k=>{const t=$('#th-'+k);if(t)t.innerHTML=biz[k]?'<img src="'+esc(biz[k])+'">':'none'})};
+  onBizChange=()=>{mUpdate();const bb=$('#bizb');if(bb)bb.style.display=(biz.name||'').trim()?'none':'flex';const p=$('#f-prep');if(p)p.value=biz.preparedBy||'';['preparedSig','signature'].forEach(k=>{const t=$('#th-'+k);if(t)t.innerHTML=biz[k]?'<img src="'+esc(biz[k])+'">':'none'})};
   watchFit($('.pv-wrap'));
   mUpdate();
 }
@@ -920,3 +928,4 @@ if(document.readyState!=='loading')route();
 </script>
 </body>
 </html>
+
